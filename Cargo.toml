@@ -1,6 +1,6 @@
 [package]
 name = "block-clock"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 description = "A native desktop clock that visualizes the day as a 24x60 grid of 1,440 minute blocks."
 license = "PolyForm-Noncommercial-1.0.0"
