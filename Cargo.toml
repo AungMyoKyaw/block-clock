@@ -1,0 +1,24 @@
+[package]
+name = "block-clock"
+version = "0.2.0"
+edition = "2024"
+description = "A native desktop clock that visualizes the day as a 24x60 grid of 1,440 minute blocks."
+license = "PolyForm-Noncommercial-1.0.0"
+repository = "https://github.com/AungMyoKyaw/block-clock"
+homepage = "https://aungmyokyaw.github.io/block-clock/"
+keywords = ["clock", "time", "productivity", "gpui", "desktop"]
+categories = ["gui", "date-and-time"]
+publish = false
+
+[dependencies]
+gpui = "=0.2.2"
+chrono = "0.4"
+iana-time-zone = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
+raw-window-handle = "0.6"
+
+[dev-dependencies]
+gpui = { version = "=0.2.2", features = ["test-support"] }
+tempfile = "3"

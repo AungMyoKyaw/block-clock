@@ -1,0 +1,7 @@
+/target/
+.DS_Store
+*.log
+*.sw?
+.vscode/*
+!.vscode/extensions.json
+.idea

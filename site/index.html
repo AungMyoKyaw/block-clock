@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Block Clock — 1,440 blocks for the day</title>
+  <meta name="description" content="A native desktop clock built with Rust and GPUI that visualizes the day as a 24×60 grid of 1,440 minute blocks." />
+  <link rel="icon" type="image/png" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="#top">
+        <img src="assets/app-icon.png" width="28" height="28" alt="" />
+        <span>Block Clock</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#downloads">Downloads</a>
+        <a href="#shortcuts">Shortcuts</a>
+        <a href="https://github.com/AungMyoKyaw/block-clock" target="_blank" rel="noreferrer">GitHub</a>
+        <button id="theme-toggle" class="icon-toggle" type="button" aria-label="Toggle color theme">Theme</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top" class="container">
+    <section class="hero">
+      <div class="hero-copy">
+        <h1>1,440 blocks for the day.</h1>
+        <p class="subtitle">A native desktop clock built with Rust and GPUI. Every minute of the day sits on one 24×60 grid.</p>
+        <div class="hero-actions">
+          <a id="primary-download" class="btn btn-primary" href="https://github.com/AungMyoKyaw/block-clock/releases/latest">Download for macOS</a>
+          <a class="btn btn-secondary" href="https://github.com/AungMyoKyaw/block-clock" target="_blank" rel="noreferrer">Source on GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="demo-section" aria-label="Live interactive Block Clock">
+      <div class="clock-window">
+        <div class="clock-panel">
+          <div class="clock-header">
+            <div class="clock-time-group">
+              <span class="wordmark">Block Clock</span>
+              <div id="live-time" class="live-time">--:--</div>
+              <div id="live-date" class="live-date">---</div>
+            </div>
+            <div class="clock-tools">
+              <button id="format-toggle" class="tool-btn" type="button">24h</button>
+              <button id="jump-now" class="tool-link" type="button">Jump to now</button>
+            </div>
+          </div>
+
+          <div class="grid-card">
+            <div class="ruler-row">
+              <span class="ruler-spacer" aria-hidden="true"></span>
+              <div class="ruler-marks" aria-hidden="true">
+                <span>00</span>
+                <span>15</span>
+                <span>30</span>
+                <span>45</span>
+              </div>
+              <span id="hover-readout" class="hover-readout"></span>
+            </div>
+            <div id="block-grid" class="block-grid" role="grid" aria-label="24 by 60 minute grid"></div>
+          </div>
+        </div>
+
+        <aside class="rail" aria-label="Day inspector">
+          <div class="rail-section">
+            <div class="rail-label">Day position</div>
+            <div class="stat-row"><span>Block</span><strong id="stat-block">-- / 1440</strong></div>
+            <div class="stat-row"><span>Hour · minute</span><strong id="stat-hm">-- · --</strong></div>
+            <div class="stat-row"><span>Day elapsed</span><strong id="stat-pct">--%</strong></div>
+            <div class="progress-track" role="progressbar" aria-label="Day elapsed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="rail-divider"></div>
+
+          <div class="rail-section">
+            <div class="selection-header">
+              <span class="rail-label">Minute detail</span>
+              <button id="clear-selection" class="clear-btn" type="button" hidden>Clear</button>
+            </div>
+            <div id="selection-empty" class="selection-empty">Select any minute to inspect its position in the day.</div>
+            <div id="selection-detail" class="selection-detail" hidden>
+              <div id="sel-time" class="sel-time">--:--</div>
+              <div id="sel-state" class="sel-state">--</div>
+              <div id="sel-block" class="sel-block">Block -- / 1440</div>
+            </div>
+          </div>
+
+          <div class="rail-footer">
+            <div class="tz-row">
+              <span id="tz-label">UTC</span>
+              <span id="dst-badge" class="dst-badge" hidden>DST</span>
+            </div>
+            <div class="legend">
+              <div class="legend-item"><span class="swatch past-day"></span>Earlier today</div>
+              <div class="legend-item"><span class="swatch current-hour"></span>Earlier this hour</div>
+              <div class="legend-item"><span class="swatch now"></span>Current minute</div>
+              <div class="legend-item"><span class="swatch future"></span>Upcoming</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="downloads" class="section">
+      <div class="section-head">
+        <h2>Downloads</h2>
+        <a href="https://github.com/AungMyoKyaw/block-clock/releases/latest" target="_blank" rel="noreferrer">All releases &amp; SHA-256 checksums</a>
+      </div>
+      <div class="download-grid">
+        <a class="download-card" href="https://github.com/AungMyoKyaw/block-clock/releases/latest/download/block-clock-macos-arm64.zip">
+          <div class="dl-os">macOS · Apple Silicon</div>
+          <div class="dl-file">block-clock-macos-arm64.zip</div>
+          <div class="dl-meta">Universal .app bundle for M-series Macs</div>
+        </a>
+        <a class="download-card" href="https://github.com/AungMyoKyaw/block-clock/releases/latest/download/block-clock-macos-x64.zip">
+          <div class="dl-os">macOS · Intel</div>
+          <div class="dl-file">block-clock-macos-x64.zip</div>
+          <div class="dl-meta">.app bundle for x86_64 Macs</div>
+        </a>
+        <a class="download-card" href="https://github.com/AungMyoKyaw/block-clock/releases/latest/download/block-clock-windows-x64.zip">
+          <div class="dl-os">Windows · x64</div>
+          <div class="dl-file">block-clock-windows-x64.zip</div>
+          <div class="dl-meta">Standalone GUI binary for Windows 10/11</div>
+        </a>
+        <a class="download-card" href="https://github.com/AungMyoKyaw/block-clock/releases/latest/download/block-clock-linux-x64.tar.gz">
+          <div class="dl-os">Linux · x64</div>
+          <div class="dl-file">block-clock-linux-x64.tar.gz</div>
+          <div class="dl-meta">Binary, .desktop entry, and icon (Wayland / X11)</div>
+        </a>
+      </div>
+    </section>
+
+    <section id="shortcuts" class="section two-col">
+      <div>
+        <h2>Keyboard shortcuts</h2>
+        <dl class="spec-list">
+          <div><dt>⌘/Ctrl + P</dt><dd>Toggle always-on-top pin</dd></div>
+          <div><dt>⌘/Ctrl + Shift + F</dt><dd>Toggle fullscreen</dd></div>
+          <div><dt>⌘/Ctrl + ,</dt><dd>Open settings</dd></div>
+          <div><dt>J</dt><dd>Jump to current minute</dd></div>
+          <div><dt>Arrows / Home / End</dt><dd>Move minute selection across the grid</dd></div>
+          <div><dt>Esc</dt><dd>Close settings, exit fullscreen, or clear selection</dd></div>
+        </dl>
+      </div>
+      <div>
+        <h2>Architecture</h2>
+        <dl class="spec-list">
+          <div><dt>Runtime</dt><dd>Native Rust binary with GPUI</dd></div>
+          <div><dt>Rendering</dt><dd>Metal on macOS, DirectX on Windows, Vulkan on Linux</dd></div>
+          <div><dt>Storage</dt><dd>Single local settings.json file in OS config dir</dd></div>
+          <div><dt>Network</dt><dd>Zero network requests, zero telemetry</dd></div>
+          <div><dt>Timekeeping</dt><dd>System local clock with IANA timezone &amp; DST detection</dd></div>
+        </dl>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>PolyForm Noncommercial License 1.0.0</span>
+      <a href="https://github.com/AungMyoKyaw/block-clock" target="_blank" rel="noreferrer">github.com/AungMyoKyaw/block-clock</a>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

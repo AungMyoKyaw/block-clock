@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Block Clock
+Comment=Visualize the day as a 24x60 grid of 1,440 minute blocks
+Exec=block-clock
+Icon=block-clock
+Terminal=false
+Categories=Utility;Clock;
+Keywords=clock;time;productivity;
+StartupWMClass=block-clock
