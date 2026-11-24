@@ -83,8 +83,25 @@ mod tests {
             window_h: Some(720.0),
         };
         original.save_to(&path).expect("save settings");
+        assert!(!path.with_extension("json.tmp").exists());
         let loaded = Settings::load_from(&path).expect("load settings");
         assert_eq!(original, loaded);
+    }
+
+    #[test]
+    fn partial_json_and_legacy_auto_time_format_load_with_defaults() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("settings.json");
+        fs::write(&path, r#"{"time_format": "auto"}"#).expect("write partial json");
+
+        let loaded = Settings::load_from(&path).expect("load partial settings");
+        assert_eq!(loaded.time_format, TimeFormat::Hour24);
+        assert_eq!(loaded.theme, ThemeMode::System);
+        assert!(!loaded.pin);
+        assert_eq!(loaded.window_x, None);
+        assert_eq!(loaded.window_y, None);
+        assert_eq!(loaded.window_w, None);
+        assert_eq!(loaded.window_h, None);
     }
 
     #[test]

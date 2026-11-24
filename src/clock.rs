@@ -109,6 +109,29 @@ pub fn cell_state_label(state: CellState) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
+pub fn format_relative_offset(now: Cell, target: Cell) -> String {
+    let diff = block_index(target) as i32 - block_index(now) as i32;
+    if diff == 0 {
+        return "Active now".to_string();
+    }
+    let abs = diff.abs();
+    let hours = abs / 60;
+    let mins = abs % 60;
+    let span = if hours == 0 {
+        format!("{mins}m")
+    } else if mins == 0 {
+        format!("{hours}h")
+    } else {
+        format!("{hours}h {mins:02}m")
+    };
+    if diff < 0 {
+        format!("{span} ago")
+    } else {
+        format!("in {span}")
+    }
+}
+
 pub fn format_time(cell: Cell, mode: TimeFormat) -> String {
     match mode {
         TimeFormat::Hour24 => format!("{:02}:{:02}", cell.hour, cell.minute),
@@ -286,5 +309,29 @@ mod tests {
         assert!(d <= std::time::Duration::from_secs(15) + std::time::Duration::from_millis(50));
         assert_eq!(HOUR_LABELS[0], "00");
         assert_eq!(HOUR_LABELS[23], "23");
+    }
+
+    #[test]
+    fn snapshot_from_local_falls_back_to_utc_offset_when_iana_missing() {
+        let local_now = Local::now();
+        let fallback = snapshot_from_local(local_now, None);
+        assert!(fallback.tz_label.starts_with("UTC"));
+        assert!(fallback.tz_label.len() == 9);
+        assert!(fallback.tz_label.contains(':'));
+
+        let explicit = snapshot_from_local(local_now, Some("Asia/Tokyo".to_string()));
+        assert_eq!(explicit.tz_label, "Asia/Tokyo");
+    }
+
+    #[test]
+    fn relative_offset_formatting() {
+        let now = Cell::new(10, 30);
+        assert_eq!(format_relative_offset(now, Cell::new(10, 30)), "Active now");
+        assert_eq!(format_relative_offset(now, Cell::new(10, 7)), "23m ago");
+        assert_eq!(format_relative_offset(now, Cell::new(9, 25)), "1h 05m ago");
+        assert_eq!(format_relative_offset(now, Cell::new(8, 30)), "2h ago");
+        assert_eq!(format_relative_offset(now, Cell::new(10, 45)), "in 15m");
+        assert_eq!(format_relative_offset(now, Cell::new(13, 0)), "in 2h 30m");
+        assert_eq!(format_relative_offset(now, Cell::new(12, 30)), "in 2h");
     }
 }

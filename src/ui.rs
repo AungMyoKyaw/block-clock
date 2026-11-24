@@ -1397,6 +1397,32 @@ mod tests {
         assert_eq!(saved.time_format, TimeFormat::Hour12);
     }
 
+    #[gpui::test]
+    fn unwritable_settings_path_surfaces_and_clears_notice(cx: &mut TestAppContext) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Point settings_path at an existing directory so save_to fails deterministically.
+        let bad_path = dir.path().to_path_buf();
+
+        let window = cx.add_window(|window, cx| {
+            BlockClockView::new(window, cx, Settings::default(), Some(bad_path), None)
+        });
+
+        window
+            .update(cx, |view, _, cx| {
+                assert!(view.notice.is_none());
+                view.set_theme(ThemeMode::Dark, cx);
+                assert!(
+                    view.notice
+                        .as_deref()
+                        .is_some_and(|msg| msg.starts_with("Could not save settings:"))
+                );
+
+                view.open_settings(cx);
+                assert!(view.notice.is_none());
+            })
+            .expect("update window");
+    }
+
     #[test]
     fn grid_geometry_hit_testing_snaps_gaps_and_rejects_outside() {
         let bounds = Bounds {
