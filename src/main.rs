@@ -24,7 +24,7 @@ fn main() {
     Application::new()
         .with_assets(assets::Assets)
         .run(move |cx: &mut App| {
-            platform::set_app_icon(include_bytes!("../assets/app-icon.png"));
+            platform::set_app_icon(include_bytes!("../assets/AppIcon.icns"));
             cx.bind_keys([
                 KeyBinding::new("cmd-p", TogglePin, None),
                 KeyBinding::new("ctrl-p", TogglePin, None),

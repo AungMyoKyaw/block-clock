@@ -49,7 +49,7 @@ pub fn set_always_on_top(_window: &Window, _enabled: bool) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-pub fn set_app_icon(png_bytes: &[u8]) {
+pub fn set_app_icon(icon_bytes: &[u8]) {
     use std::ffi::c_void;
 
     unsafe extern "C" {
@@ -58,11 +58,43 @@ pub fn set_app_icon(png_bytes: &[u8]) {
         fn objc_msgSend();
     }
 
-    if png_bytes.is_empty() {
+    if icon_bytes.is_empty() {
         return;
     }
 
     unsafe {
+        let msg_no_arg: unsafe extern "C" fn(*mut c_void, *const c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const c_void);
+        let msg_one_ptr: unsafe extern "C" fn(
+            *mut c_void,
+            *const c_void,
+            *mut c_void,
+        ) -> *mut c_void = std::mem::transmute(objc_msgSend as *const c_void);
+
+        // Packaged builds already get their Dock icon from Info.plist.
+        let bundle_class = objc_getClass(c"NSBundle".as_ptr());
+        let string_class = objc_getClass(c"NSString".as_ptr());
+        let bundle = msg_no_arg(bundle_class, sel_registerName(c"mainBundle".as_ptr()));
+        let string_from_utf8: unsafe extern "C" fn(
+            *mut c_void,
+            *const c_void,
+            *const std::ffi::c_char,
+        ) -> *mut c_void = std::mem::transmute(objc_msgSend as *const c_void);
+        let icon_key = string_from_utf8(
+            string_class,
+            sel_registerName(c"stringWithUTF8String:".as_ptr()),
+            c"CFBundleIconFile".as_ptr(),
+        );
+        if !msg_one_ptr(
+            bundle,
+            sel_registerName(c"objectForInfoDictionaryKey:".as_ptr()),
+            icon_key,
+        )
+        .is_null()
+        {
+            return;
+        }
+
         let ns_data_cls = objc_getClass(c"NSData".as_ptr());
         let ns_image_cls = objc_getClass(c"NSImage".as_ptr());
         let ns_app_cls = objc_getClass(c"NSApplication".as_ptr());
@@ -80,27 +112,20 @@ pub fn set_app_icon(png_bytes: &[u8]) {
         let ns_data = msg_data_with_bytes(
             ns_data_cls,
             sel_data_with_bytes,
-            png_bytes.as_ptr().cast(),
-            png_bytes.len(),
+            icon_bytes.as_ptr().cast(),
+            icon_bytes.len(),
         );
         if ns_data.is_null() {
             return;
         }
 
         let sel_alloc = sel_registerName(c"alloc".as_ptr());
-        let msg_no_arg: unsafe extern "C" fn(*mut c_void, *const c_void) -> *mut c_void =
-            std::mem::transmute(objc_msgSend as *const c_void);
         let image_alloc = msg_no_arg(ns_image_cls, sel_alloc);
         if image_alloc.is_null() {
             return;
         }
 
         let sel_init_with_data = sel_registerName(c"initWithData:".as_ptr());
-        let msg_one_ptr: unsafe extern "C" fn(
-            *mut c_void,
-            *const c_void,
-            *mut c_void,
-        ) -> *mut c_void = std::mem::transmute(objc_msgSend as *const c_void);
         let ns_image = msg_one_ptr(image_alloc, sel_init_with_data, ns_data);
         if ns_image.is_null() {
             return;
@@ -123,4 +148,4 @@ pub fn set_app_icon(png_bytes: &[u8]) {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn set_app_icon(_png_bytes: &[u8]) {}
+pub fn set_app_icon(_icon_bytes: &[u8]) {}
