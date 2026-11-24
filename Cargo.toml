@@ -1,6 +1,6 @@
 [package]
 name = "block-clock"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "A native desktop clock that visualizes the day as a 24x60 grid of 1,440 minute blocks."
 license = "PolyForm-Noncommercial-1.0.0"
@@ -25,3 +25,10 @@ tempfile = "3"
 
 [patch.crates-io]
 xattr = { path = "patches/xattr" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

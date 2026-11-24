@@ -5,6 +5,11 @@ pub const HOURS: u8 = 24;
 pub const MINUTES_PER_HOUR: u8 = 60;
 pub const BLOCKS_PER_DAY: u16 = (HOURS as u16) * (MINUTES_PER_HOUR as u16);
 
+pub const HOUR_LABELS: [&str; 24] = [
+    "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15",
+    "16", "17", "18", "19", "20", "21", "22", "23",
+];
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Cell {
     pub hour: u8,
@@ -141,6 +146,14 @@ pub fn current_now() -> NowSnapshot {
     snapshot_from_local(local_now, iana_time_zone::get_timezone().ok())
 }
 
+/// Returns how long to sleep before checking the clock again: aligns to the next
+/// minute boundary (with a 50ms cushion) and caps at 15s for fast wake recovery.
+pub fn duration_until_next_minute() -> std::time::Duration {
+    let secs_past = Local::now().second().min(59) as u64;
+    let remaining_secs = (60 - secs_past).min(15);
+    std::time::Duration::from_secs(remaining_secs) + std::time::Duration::from_millis(50)
+}
+
 fn snapshot_from_local(local_now: DateTime<Local>, iana_tz: Option<String>) -> NowSnapshot {
     let cell = Cell::new(local_now.hour() as u8, local_now.minute() as u8);
     let date_label = local_now.format("%A, %-d %B").to_string();
@@ -268,5 +281,14 @@ mod tests {
         assert!(snap.cell.minute < MINUTES_PER_HOUR);
         assert!(!snap.date_label.is_empty());
         assert!(!snap.tz_label.is_empty());
+    }
+
+    #[test]
+    fn timer_interval_and_hour_labels_are_bounded() {
+        let d = duration_until_next_minute();
+        assert!(d >= std::time::Duration::from_millis(50));
+        assert!(d <= std::time::Duration::from_secs(15) + std::time::Duration::from_millis(50));
+        assert_eq!(HOUR_LABELS[0], "00");
+        assert_eq!(HOUR_LABELS[23], "23");
     }
 }

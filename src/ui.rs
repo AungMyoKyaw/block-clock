@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::time::Duration;
 
 use gpui::{
     AnyElement, App, Context, FocusHandle, Focusable, FontWeight, Hsla, SharedString, Subscription,
@@ -7,9 +6,9 @@ use gpui::{
 };
 
 use crate::clock::{
-    BLOCKS_PER_DAY, Cell, CellState, HOURS, MINUTES_PER_HOUR, NavDirection, NowSnapshot,
-    TimeFormat, adjacent_cell, block_number, cell_state_label, current_now, day_percentage,
-    format_time, state_at,
+    BLOCKS_PER_DAY, Cell, CellState, HOUR_LABELS, HOURS, MINUTES_PER_HOUR, NavDirection,
+    NowSnapshot, TimeFormat, adjacent_cell, block_number, cell_state_label, current_now,
+    day_percentage, duration_until_next_minute, format_time, state_at,
 };
 use crate::platform;
 use crate::settings::Settings;
@@ -67,6 +66,14 @@ impl BlockClockView {
             cx.notify();
         });
 
+        let activation_sub = cx.observe_window_activation(window, |this, _window, cx| {
+            let next = current_now();
+            if next.cell != this.now.cell || next.date_label != this.now.date_label {
+                this.now = next;
+                cx.notify();
+            }
+        });
+
         let bounds_sub = cx.observe_window_bounds(window, |this, window, _cx| {
             if window.is_fullscreen() {
                 return;
@@ -87,7 +94,9 @@ impl BlockClockView {
 
         let tick_task = cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_secs(1)).await;
+                cx.background_executor()
+                    .timer(duration_until_next_minute())
+                    .await;
                 let updated = this.update(cx, |view, cx| {
                     let next = current_now();
                     if next.cell != view.now.cell || next.date_label != view.now.date_label {
@@ -111,7 +120,7 @@ impl BlockClockView {
             notice: initial_notice,
             focus_handle,
             _tick_task: tick_task,
-            _subscriptions: vec![appearance_sub, bounds_sub],
+            _subscriptions: vec![appearance_sub, activation_sub, bounds_sub],
         }
     }
 
@@ -442,7 +451,7 @@ impl BlockClockView {
             .text_size(px(11.))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(palette.text_muted)
-            .child(format!("{hour:02}"));
+            .child(HOUR_LABELS[hour as usize]);
 
         let mut track = div().flex_1().min_w_0().flex().flex_row().gap(px(1.));
 
