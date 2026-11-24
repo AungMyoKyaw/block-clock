@@ -29,8 +29,7 @@ actions!(
         MoveUp,
         MoveDown,
         MoveRowStart,
-        MoveRowEnd,
-        Quit
+        MoveRowEnd
     ]
 );
 
@@ -1234,7 +1233,6 @@ impl Render for BlockClockView {
                     this.move_selection(NavDirection::End, cx)
                 }),
             )
-            .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
             .relative()
             .size_full()
             .bg(palette.bg)

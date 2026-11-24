@@ -8,14 +8,34 @@ mod theme;
 mod ui;
 
 use gpui::{
-    App, Application, Bounds, KeyBinding, WindowBounds, WindowOptions, point, prelude::*, px, size,
+    App, Application, Bounds, KeyBinding, WindowBounds, WindowOptions, actions, point, prelude::*,
+    px, size,
 };
+#[cfg(target_os = "macos")]
+use gpui::{Menu, MenuItem};
 
 use crate::settings::{Settings, default_settings_path};
 use crate::ui::{
     BlockClockView, Escape, JumpToNow, MoveDown, MoveLeft, MoveRight, MoveRowEnd, MoveRowStart,
-    MoveUp, OpenSettings, Quit, ToggleFullscreen, TogglePin,
+    MoveUp, OpenSettings, ToggleFullscreen, TogglePin,
 };
+
+actions!(block_clock, [Quit]);
+#[cfg(target_os = "macos")]
+actions!(block_clock, [About]);
+
+#[cfg(target_os = "macos")]
+fn set_up_app_menu(cx: &mut App) {
+    cx.on_action(|_: &About, _| platform::show_about_panel());
+    cx.set_menus(vec![Menu {
+        name: "Block Clock".into(),
+        items: vec![
+            MenuItem::action("About Block Clock", About),
+            MenuItem::separator(),
+            MenuItem::action("Quit Block Clock", Quit),
+        ],
+    }]);
+}
 
 fn main() {
     let (initial_settings, initial_notice) = Settings::load_default();
@@ -42,6 +62,10 @@ fn main() {
                 KeyBinding::new("end", MoveRowEnd, None),
                 KeyBinding::new("cmd-q", Quit, None),
             ]);
+
+            cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
+            #[cfg(target_os = "macos")]
+            set_up_app_menu(cx);
 
             cx.on_window_closed(|cx| {
                 if cx.windows().is_empty() {

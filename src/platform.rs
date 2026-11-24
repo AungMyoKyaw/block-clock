@@ -149,3 +149,31 @@ pub fn set_app_icon(icon_bytes: &[u8]) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn set_app_icon(_icon_bytes: &[u8]) {}
+
+#[cfg(target_os = "macos")]
+pub fn show_about_panel() {
+    use std::ffi::c_void;
+
+    unsafe extern "C" {
+        fn objc_getClass(name: *const std::ffi::c_char) -> *mut c_void;
+        fn sel_registerName(name: *const std::ffi::c_char) -> *const c_void;
+        fn objc_msgSend();
+    }
+
+    // The menu action runs on the app thread after GPUI initializes AppKit.
+    unsafe {
+        let shared_application: unsafe extern "C" fn(*mut c_void, *const c_void) -> *mut c_void =
+            std::mem::transmute(objc_msgSend as *const c_void);
+        let app = shared_application(
+            objc_getClass(c"NSApplication".as_ptr()),
+            sel_registerName(c"sharedApplication".as_ptr()),
+        );
+        let order_front: unsafe extern "C" fn(*mut c_void, *const c_void, *mut c_void) =
+            std::mem::transmute(objc_msgSend as *const c_void);
+        order_front(
+            app,
+            sel_registerName(c"orderFrontStandardAboutPanel:".as_ptr()),
+            std::ptr::null_mut(),
+        );
+    }
+}
