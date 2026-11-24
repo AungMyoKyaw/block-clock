@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Microsoft Store MSIX manifest template for Block Clock.
+
+  Placeholder tokens substituted by scripts/package-windows.ps1 before MakeAppx.exe:
+    __APP_VERSION__  -> "<version from Cargo.toml>.0" (X.Y.Z.W format)
+    __PUBLISHER__    -> Package/Identity/Publisher from Partner Center
+                        (including CN= prefix), or MSIX_PUBLISHER env var.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+  <Identity
+    Name="AungMyoKyaw.BlockClock24h"
+    Publisher="__PUBLISHER__"
+    Version="__APP_VERSION__"
+    ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Block Clock 24h</DisplayName>
+    <PublisherDisplayName>AungMyoKyaw</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en" />
+  </Resources>
+  <Applications>
+    <Application Id="BlockClock" Executable="block-clock.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Block Clock 24h"
+        Description="A native desktop clock that visualizes the day as 1,440 continuous minute blocks across 24 hours."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
