@@ -22,3 +22,6 @@ raw-window-handle = "0.6"
 [dev-dependencies]
 gpui = { version = "=0.2.2", features = ["test-support"] }
 tempfile = "3"
+
+[patch.crates-io]
+xattr = { path = "patches/xattr" }
