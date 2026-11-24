@@ -1,8 +1,10 @@
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Context, FocusHandle, Focusable, FontWeight, Hsla, SharedString, Subscription,
-    Task, Window, actions, div, prelude::*, px, relative, svg,
+    AnyElement, App, BorderStyle, Bounds, Context, Corners, DispatchPhase, Edges, FocusHandle,
+    Focusable, FontWeight, Hsla, MouseButton, MouseExitEvent, Pixels, Point, SharedString,
+    Subscription, Task, Window, actions, canvas, div, fill, prelude::*, px, quad, relative, svg,
 };
 
 use crate::clock::{
@@ -36,6 +38,7 @@ pub struct BlockClockView {
     now: NowSnapshot,
     selected: Option<Cell>,
     hovered: Option<Cell>,
+    grid_bounds: Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     settings_open: bool,
     settings: Settings,
     settings_path: Option<PathBuf>,
@@ -43,6 +46,111 @@ pub struct BlockClockView {
     focus_handle: FocusHandle,
     _tick_task: Task<()>,
     _subscriptions: Vec<Subscription>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct GridGeometry {
+    origin_x: f32,
+    origin_y: f32,
+    width: f32,
+    height: f32,
+    cell_w: f32,
+    cell_h: f32,
+}
+
+impl GridGeometry {
+    const COL_GAP: f32 = 1.0;
+    const DIVIDER_W: f32 = 1.0;
+    const ROW_GAP: f32 = 3.0;
+    const QUARTER_BREAK: f32 = 4.0;
+    const HORIZONTAL_FIXED: f32 = 65.0; // 62 * 1px gaps + 3 * 1px dividers
+    const VERTICAL_FIXED: f32 = 81.0; // 23 * 3px gaps + 3 * 4px 6-hour breaks
+
+    fn from_bounds(bounds: Bounds<Pixels>) -> Option<Self> {
+        let origin_x: f32 = bounds.origin.x.into();
+        let origin_y: f32 = bounds.origin.y.into();
+        let width: f32 = bounds.size.width.into();
+        let height: f32 = bounds.size.height.into();
+        if width <= 0.0 || height <= 0.0 {
+            return None;
+        }
+        let cell_w = ((width - Self::HORIZONTAL_FIXED) / f32::from(MINUTES_PER_HOUR)).max(1.0);
+        let cell_h = ((height - Self::VERTICAL_FIXED) / f32::from(HOURS)).max(2.0);
+        Some(Self {
+            origin_x,
+            origin_y,
+            width,
+            height,
+            cell_w,
+            cell_h,
+        })
+    }
+
+    fn col_x(&self, minute: u8) -> f32 {
+        let m = f32::from(minute);
+        let dividers = f32::from(minute / 15);
+        // Each 15-minute divider adds 1px gap + 1px divider width on top of the column gap.
+        let extra = dividers * (Self::COL_GAP + Self::DIVIDER_W);
+        self.origin_x + m * (self.cell_w + Self::COL_GAP) + extra
+    }
+
+    fn row_y(&self, hour: u8) -> f32 {
+        let h = f32::from(hour);
+        let breaks = f32::from(hour / 6);
+        self.origin_y + h * (self.cell_h + Self::ROW_GAP) + breaks * Self::QUARTER_BREAK
+    }
+
+    fn cell_rect(&self, cell: Cell) -> Bounds<Pixels> {
+        Bounds {
+            origin: Point::new(px(self.col_x(cell.minute)), px(self.row_y(cell.hour))),
+            size: gpui::size(px(self.cell_w), px(self.cell_h)),
+        }
+    }
+
+    fn divider_rect(&self, quarter: u8) -> Bounds<Pixels> {
+        let minute = quarter * 15;
+        let x = self.col_x(minute) - Self::COL_GAP - Self::DIVIDER_W;
+        Bounds {
+            origin: Point::new(px(x), px(self.origin_y)),
+            size: gpui::size(px(Self::DIVIDER_W), px(self.height)),
+        }
+    }
+
+    fn cell_at_point(&self, pos: Point<Pixels>) -> Option<Cell> {
+        let px_x: f32 = pos.x.into();
+        let px_y: f32 = pos.y.into();
+        if px_x < self.origin_x
+            || px_x > self.origin_x + self.width
+            || px_y < self.origin_y
+            || px_y > self.origin_y + self.height
+        {
+            return None;
+        }
+
+        let mut best_minute = 0u8;
+        let mut best_dx = f32::INFINITY;
+        for minute in 0..MINUTES_PER_HOUR {
+            let center = self.col_x(minute) + self.cell_w * 0.5;
+            let dx = (px_x - center).abs();
+            if dx < best_dx {
+                best_dx = dx;
+                best_minute = minute;
+            }
+        }
+
+        let mut best_hour = 0u8;
+        let mut best_dy = f32::INFINITY;
+        for hour in 0..HOURS {
+            let center = self.row_y(hour) + self.cell_h * 0.5;
+            let dy = (px_y - center).abs();
+            if dy < best_dy {
+                best_dy = dy;
+                best_hour = hour;
+            }
+        }
+
+        Some(Cell::new(best_hour, best_minute))
+    }
 }
 
 impl Focusable for BlockClockView {
@@ -114,6 +222,7 @@ impl BlockClockView {
             now: current_now(),
             selected: None,
             hovered: None,
+            grid_bounds: Rc::new(std::cell::Cell::new(None)),
             settings_open: false,
             settings,
             settings_path,
@@ -384,7 +493,32 @@ impl BlockClockView {
             .into()
         });
 
+        let readout_bar = div()
+            .h(px(16.))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(
+                div()
+                    .text_size(px(10.))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(palette.text_faint)
+                    .child("DAY GRID · 1,440 MINUTES"),
+            )
+            .when_some(hover_text, |el, text| {
+                el.child(
+                    div()
+                        .text_size(px(11.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(palette.text)
+                        .child(text),
+                )
+            });
+
         let ruler = div()
+            .h(px(14.))
+            .flex_shrink_0()
             .flex()
             .items_center()
             .gap(px(6.))
@@ -401,111 +535,158 @@ impl BlockClockView {
                     .child(div().flex_1().child("15"))
                     .child(div().flex_1().child("30"))
                     .child(div().flex_1().child("45")),
-            )
-            .when_some(hover_text, |el, text| {
-                el.child(
-                    div()
-                        .text_size(px(11.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(palette.text)
-                        .child(text),
-                )
-            });
+            );
 
-        let mut rows = div().flex_1().min_h_0().flex().flex_col().gap(px(3.));
+        let mut hour_labels = div()
+            .w(px(28.))
+            .flex_shrink_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .gap(px(3.));
 
         for hour in 0..HOURS {
-            rows = rows.child(self.render_hour_row(hour, palette, cx));
+            let mut label = div()
+                .flex_1()
+                .min_h(px(2.))
+                .flex()
+                .items_center()
+                .justify_end()
+                .pr(px(4.))
+                .text_size(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(palette.text_muted)
+                .child(HOUR_LABELS[hour as usize]);
+            if hour > 0 && hour.is_multiple_of(6) {
+                label = label.mt(px(4.));
+            }
+            hour_labels = hour_labels.child(label);
         }
+
+        let now_cell = self.now.cell;
+        let selected_cell = self.selected;
+        let hovered_cell = self.hovered;
+        let grid_bounds_prepaint = self.grid_bounds.clone();
+        let grid_bounds_move = self.grid_bounds.clone();
+        let grid_bounds_click = self.grid_bounds.clone();
+        let on_window_exit = cx.listener(|this, _: &MouseExitEvent, _, cx| {
+            if this.hovered.take().is_some() {
+                cx.notify();
+            }
+        });
+
+        let grid_canvas = div()
+            .id("block-grid-canvas")
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .cursor_pointer()
+            .on_mouse_move(
+                cx.listener(move |this, event: &gpui::MouseMoveEvent, _, cx| {
+                    let next = grid_bounds_move
+                        .get()
+                        .and_then(GridGeometry::from_bounds)
+                        .and_then(|geom| geom.cell_at_point(event.position));
+                    if this.hovered != next {
+                        this.hovered = next;
+                        cx.notify();
+                    }
+                }),
+            )
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                if !*hovered && this.hovered.take().is_some() {
+                    cx.notify();
+                }
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                    if let Some(cell) = grid_bounds_click
+                        .get()
+                        .and_then(GridGeometry::from_bounds)
+                        .and_then(|geom| geom.cell_at_point(event.position))
+                    {
+                        this.select_cell(cell, cx);
+                    }
+                }),
+            )
+            .child(
+                canvas(
+                    move |bounds, _, _| {
+                        grid_bounds_prepaint.set(Some(bounds));
+                    },
+                    move |bounds, _, window, _| {
+                        // A pointer that jumps outside the window may send an exit without a move.
+                        window.on_mouse_event(move |event, phase, window, cx| {
+                            if phase == DispatchPhase::Bubble {
+                                on_window_exit(event, window, cx);
+                            }
+                        });
+                        let Some(geom) = GridGeometry::from_bounds(bounds) else {
+                            return;
+                        };
+                        for quarter in 1..=3 {
+                            window.paint_quad(fill(geom.divider_rect(quarter), palette.grid));
+                        }
+                        let radius = Corners::all(px(2.));
+                        for hour in 0..HOURS {
+                            for minute in 0..MINUTES_PER_HOUR {
+                                let cell = Cell::new(hour, minute);
+                                let state = state_at(now_cell, cell);
+                                let bg = match state {
+                                    CellState::Future => palette.future,
+                                    CellState::PastDay => palette.past_day,
+                                    CellState::CurrentHourPast => palette.current_hour_past,
+                                    CellState::Now => palette.now,
+                                };
+                                let (border_widths, border_color) = if state == CellState::Now {
+                                    (Edges::all(px(2.)), palette.now_ring.into())
+                                } else if selected_cell == Some(cell) {
+                                    (Edges::all(px(1.)), palette.text.into())
+                                } else if hovered_cell == Some(cell) {
+                                    (Edges::all(px(1.)), palette.text_muted.into())
+                                } else {
+                                    (Edges::default(), Hsla::transparent_black())
+                                };
+                                window.paint_quad(quad(
+                                    geom.cell_rect(cell),
+                                    radius,
+                                    bg,
+                                    border_widths,
+                                    border_color,
+                                    BorderStyle::Solid,
+                                ));
+                            }
+                        }
+                    },
+                )
+                .size_full(),
+            );
+
+        let grid_body = div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_row()
+            .gap(px(6.))
+            .child(hour_labels)
+            .child(grid_canvas);
 
         div()
             .flex_1()
             .min_h(px(340.))
             .flex()
             .flex_col()
-            .gap(px(12.))
+            .gap(px(10.))
             .p(px(18.))
             .rounded(px(14.))
             .border_1()
             .border_color(palette.grid)
             .bg(palette.surface)
+            .child(readout_bar)
             .child(ruler)
-            .child(rows)
+            .child(grid_body)
             .into_any_element()
-    }
-
-    fn render_hour_row(&self, hour: u8, palette: Palette, cx: &mut Context<Self>) -> AnyElement {
-        let mut row = div().flex_1().min_h(px(8.)).flex().flex_row().gap(px(6.));
-
-        if hour > 0 && hour.is_multiple_of(6) {
-            row = row.mt(px(4.));
-        }
-
-        let hour_label = div()
-            .w(px(28.))
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .justify_end()
-            .pr(px(4.))
-            .text_size(px(11.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(palette.text_muted)
-            .child(HOUR_LABELS[hour as usize]);
-
-        let mut track = div().flex_1().min_w_0().flex().flex_row().gap(px(1.));
-
-        for minute in 0..MINUTES_PER_HOUR {
-            if minute > 0 && minute.is_multiple_of(15) {
-                track = track.child(div().w(px(1.)).h_full().bg(palette.grid));
-            }
-
-            let cell = Cell::new(hour, minute);
-            let state = state_at(self.now.cell, cell);
-            let is_now = state == CellState::Now;
-            let is_selected = self.selected == Some(cell);
-
-            let bg = match state {
-                CellState::Future => palette.future,
-                CellState::PastDay => palette.past_day,
-                CellState::CurrentHourPast => palette.current_hour_past,
-                CellState::Now => palette.now,
-            };
-
-            let cell_id = (hour as usize) * (MINUTES_PER_HOUR as usize) + (minute as usize);
-            let mut block = div()
-                .id(("cell", cell_id))
-                .flex_1()
-                .min_w(px(2.))
-                .h_full()
-                .rounded(px(2.))
-                .cursor_pointer()
-                .bg(bg)
-                .on_hover(cx.listener(move |this, hovered, _, cx| {
-                    if *hovered {
-                        if this.hovered != Some(cell) {
-                            this.hovered = Some(cell);
-                            cx.notify();
-                        }
-                    } else if this.hovered == Some(cell) {
-                        this.hovered = None;
-                        cx.notify();
-                    }
-                }))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.select_cell(cell, cx);
-                }));
-
-            if is_now {
-                block = block.border_2().border_color(palette.now_ring);
-            } else if is_selected {
-                block = block.border_1().border_color(palette.text);
-            }
-
-            track = track.child(block);
-        }
-
-        row.child(hour_label).child(track).into_any_element()
     }
 
     fn render_rail(&self, palette: Palette, compact: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -1081,7 +1262,67 @@ impl Render for BlockClockView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::TestAppContext;
+    use gpui::{Modifiers, TestAppContext, VisualTestContext};
+
+    #[gpui::test]
+    fn grid_hover_keeps_layout_stable_and_click_selects(cx: &mut TestAppContext) {
+        let window = cx.add_window(|window, cx| {
+            BlockClockView::new(window, cx, Settings::default(), None, None)
+        });
+        let mut visual = VisualTestContext::from_window(window.into(), cx);
+        visual.update(|window, cx| window.draw(cx).clear());
+        let bounds = window
+            .update(cx, |view, _, _| {
+                view.grid_bounds.get().expect("grid bounds")
+            })
+            .expect("read grid bounds");
+        let geometry = GridGeometry::from_bounds(bounds).expect("grid geometry");
+        let target = Cell::new(12, 14);
+        let cell = geometry.cell_rect(target);
+        let center = cell.center();
+        visual.simulate_mouse_move(center, None, Modifiers::none());
+        visual.update(|window, cx| window.draw(cx).clear());
+        window
+            .update(cx, |view, _, _| {
+                assert_eq!(view.hovered, Some(target));
+                assert_eq!(view.selected, None);
+                assert_eq!(view.grid_bounds.get(), Some(bounds));
+            })
+            .expect("redraw hovered grid");
+
+        // Cross into the quarter-hour divider, then move to the next cell.
+        let gap = Point::new(cell.origin.x + cell.size.width + px(0.5), center.y);
+        visual.simulate_mouse_move(gap, None, Modifiers::none());
+        window
+            .update(cx, |view, _, _| assert_eq!(view.hovered, Some(target)))
+            .expect("inspect hover in gap");
+
+        let next = Cell::new(12, 15);
+        let next_center = geometry.cell_rect(next).center();
+        visual.simulate_mouse_move(next_center, None, Modifiers::none());
+        visual.simulate_click(next_center, Modifiers::none());
+        visual.simulate_mouse_move(
+            Point::new(bounds.origin.x - px(1.), center.y),
+            None,
+            Modifiers::none(),
+        );
+        window
+            .update(cx, |view, _, _| {
+                assert_eq!(view.hovered, None);
+                assert_eq!(view.selected, Some(next));
+            })
+            .expect("inspect hover exit and selection");
+
+        visual.simulate_mouse_move(next_center, None, Modifiers::none());
+        visual.simulate_event(MouseExitEvent {
+            position: Point::new(px(-1.), center.y),
+            pressed_button: None,
+            modifiers: Modifiers::none(),
+        });
+        window
+            .update(cx, |view, _, _| assert_eq!(view.hovered, None))
+            .expect("inspect window exit");
+    }
 
     #[gpui::test]
     fn selection_navigation_and_escape_precedence(cx: &mut TestAppContext) {
@@ -1136,5 +1377,52 @@ mod tests {
         let saved = Settings::load_from(&settings_path).expect("load saved settings");
         assert_eq!(saved.theme, ThemeMode::Dark);
         assert_eq!(saved.time_format, TimeFormat::Hour12);
+    }
+
+    #[test]
+    fn grid_geometry_hit_testing_snaps_gaps_and_rejects_outside() {
+        let bounds = Bounds {
+            origin: Point::new(px(100.0), px(80.0)),
+            size: gpui::size(px(665.0), px(321.0)),
+        };
+        let geom = GridGeometry::from_bounds(bounds).expect("valid geometry");
+        assert!((geom.cell_w - 10.0).abs() < 0.01);
+        assert!((geom.cell_h - 10.0).abs() < 0.01);
+
+        // Top-left and bottom-right corners map to 00:00 and 23:59.
+        assert_eq!(
+            geom.cell_at_point(Point::new(px(100.0), px(80.0))),
+            Some(Cell::new(0, 0))
+        );
+        assert_eq!(
+            geom.cell_at_point(Point::new(px(765.0), px(401.0))),
+            Some(Cell::new(23, 59))
+        );
+
+        // 1px gap between minute 0 and minute 1 still resolves to a cell (never None).
+        let c0 = geom.cell_rect(Cell::new(0, 0));
+        let gap_x = f32::from(c0.origin.x) + f32::from(c0.size.width) + 0.5;
+        let mid_y = f32::from(c0.origin.y) + f32::from(c0.size.height) * 0.5;
+        assert!(
+            geom.cell_at_point(Point::new(px(gap_x), px(mid_y)))
+                .is_some()
+        );
+
+        // The standard gap and the longer six-hour break both resolve to cells.
+        let r4 = geom.cell_rect(Cell::new(4, 10));
+        let row_gap = Point::new(r4.center().x, r4.origin.y + r4.size.height + px(1.));
+        assert_eq!(geom.cell_at_point(row_gap), Some(Cell::new(4, 10)));
+
+        let r5 = geom.cell_rect(Cell::new(5, 10));
+        let mid_x = f32::from(r5.origin.x) + f32::from(r5.size.width) * 0.5;
+        let break_y = f32::from(r5.origin.y) + f32::from(r5.size.height) + 3.5;
+        assert!(
+            geom.cell_at_point(Point::new(px(mid_x), px(break_y)))
+                .is_some()
+        );
+
+        // Outside bounds returns None.
+        assert_eq!(geom.cell_at_point(Point::new(px(99.0), px(80.0))), None);
+        assert_eq!(geom.cell_at_point(Point::new(px(100.0), px(402.0))), None);
     }
 }
