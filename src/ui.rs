@@ -10,7 +10,7 @@ use gpui::{
 use crate::clock::{
     BLOCKS_PER_DAY, Cell, CellState, HOUR_LABELS, HOURS, MINUTES_PER_HOUR, NavDirection,
     NowSnapshot, TimeFormat, adjacent_cell, block_number, cell_state_label, current_now,
-    day_percentage, duration_until_next_minute, format_time, state_at,
+    day_percentage, duration_until_next_minute, format_relative_offset, format_time, state_at,
 };
 use crate::platform;
 use crate::settings::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Settings};
@@ -498,6 +498,7 @@ impl BlockClockView {
                         .text_size(px(11.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(palette.text_muted)
+                        .hover(|s| s.text_color(palette.text))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.notice = None;
                             cx.notify();
@@ -717,8 +718,9 @@ impl BlockClockView {
 
     fn render_rail(&self, palette: Palette, compact: bool, cx: &mut Context<Self>) -> AnyElement {
         let block_num = block_number(self.now.cell);
-        let pct = day_percentage(self.now.cell).floor() as u32;
-        let progress_fraction = (pct as f32 / 100.0).clamp(0.0, 1.0);
+        let pct_exact = day_percentage(self.now.cell);
+        let pct = pct_exact.floor() as u32;
+        let progress_fraction = (pct_exact as f32 / 100.0).clamp(0.0, 1.0);
 
         let day_position = div()
             .flex()
@@ -813,7 +815,7 @@ impl BlockClockView {
                     div()
                         .text_size(px(12.))
                         .text_color(palette.text_muted)
-                        .child("Selected from the day grid"),
+                        .child(format_relative_offset(self.now.cell, cell)),
                 );
         } else {
             selection_section = selection_section.child(
@@ -875,18 +877,7 @@ impl BlockClockView {
             .flex_col()
             .gap(px(14.))
             .child(tz_row)
-            .child(legend)
-            .child(
-                div()
-                    .id("jump-to-now-rail")
-                    .cursor_pointer()
-                    .text_size(px(12.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(palette.now)
-                    .hover(|s| s.text_color(palette.text))
-                    .on_click(cx.listener(|this, _, _, cx| this.jump_to_now(cx)))
-                    .child("JUMP TO NOW"),
-            );
+            .child(legend);
 
         let mut rail = div()
             .flex()
@@ -1041,6 +1032,7 @@ impl BlockClockView {
                 palette.grid
             })
             .bg(palette.future)
+            .hover(|s| s.border_color(palette.grid_strong))
             .on_click(cx.listener(|this, _, window, cx| this.toggle_pin(window, cx)))
             .child(
                 div()
@@ -1088,6 +1080,7 @@ impl BlockClockView {
                     .child(
                         div()
                             .id("close-settings")
+                            .group("close-settings")
                             .cursor_pointer()
                             .w(px(32.))
                             .h(px(32.))
@@ -1102,7 +1095,8 @@ impl BlockClockView {
                                 svg()
                                     .path("icons/close.svg")
                                     .size(px(16.))
-                                    .text_color(palette.text_muted),
+                                    .text_color(palette.text_muted)
+                                    .group_hover("close-settings", |s| s.text_color(palette.text)),
                             ),
                     ),
             )
@@ -1142,7 +1136,11 @@ impl BlockClockView {
                     .border_color(palette.grid)
                     .text_size(px(11.))
                     .text_color(palette.text_muted)
-                    .child("Shortcuts: Cmd/Ctrl+P pin · Cmd/Ctrl+Shift+F fullscreen · Cmd/Ctrl+, settings · J jump to now · Esc close"),
+                    .child(if platform::supports_always_on_top() {
+                        "Shortcuts: Cmd/Ctrl+P pin · Cmd/Ctrl+Shift+F fullscreen · Cmd/Ctrl+, settings · J jump to now · Esc close"
+                    } else {
+                        "Shortcuts: Cmd/Ctrl+Shift+F fullscreen · Cmd/Ctrl+, settings · J jump to now · Esc close"
+                    }),
             );
 
         Some(

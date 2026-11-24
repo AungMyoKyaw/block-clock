@@ -109,7 +109,6 @@ pub fn cell_state_label(state: CellState) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 pub fn format_relative_offset(now: Cell, target: Cell) -> String {
     let diff = block_index(target) as i32 - block_index(now) as i32;
     if diff == 0 {

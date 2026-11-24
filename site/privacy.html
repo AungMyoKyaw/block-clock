@@ -1,34 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Block Clock — Privacy Policy</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.6;
-      max-width: 720px;
-      margin: 40px auto;
-      padding: 0 20px;
-      color: #1a1a1a;
-      background: #fafafa;
-    }
-    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-    p { margin-bottom: 1rem; color: #444; }
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Block Clock</title>
+  <meta name="description" content="Block Clock operates completely offline with zero telemetry or network requests." />
+  <link rel="icon" type="image/png" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>Privacy Policy for Block Clock</h1>
-  <p><strong>Effective Date:</strong> November 2026</p>
-  <p>Block Clock is an offline, privacy-first desktop clock application designed for deep focus.</p>
-  <h2>Data Collection</h2>
-  <p>Block Clock does <strong>not</strong> collect, store, track, or transmit any personal data, usage metrics, telemetry, or device identifiers.</p>
-  <h2>Local Storage</h2>
-  <p>All configuration options (such as theme preference, 12h/24h format, and window positioning) are stored purely locally on your device in your user configuration directory.</p>
-  <h2>Network Access</h2>
-  <p>Block Clock operates completely offline and makes zero external network requests.</p>
-  <h2>Contact</h2>
-  <p>For questions or support, visit the GitHub repository at <a href="https://github.com/AungMyoKyaw/block-clock">https://github.com/AungMyoKyaw/block-clock</a>.</p>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/app-icon.png" width="28" height="28" alt="" />
+        <span>Block Clock</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="index.html#downloads">Downloads</a>
+        <a href="index.html#shortcuts">Shortcuts</a>
+        <a href="https://github.com/AungMyoKyaw/block-clock" target="_blank" rel="noreferrer">GitHub</a>
+        <button id="theme-toggle" class="icon-toggle" type="button" aria-label="Toggle color theme">Theme</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container prose">
+    <h1>Privacy Policy</h1>
+    <p><strong>Effective Date:</strong> November 2026</p>
+    <p>Block Clock is an offline desktop clock application.</p>
+
+    <h2>Data Collection</h2>
+    <p>Block Clock does <strong>not</strong> collect, store, track, or transmit any personal data, usage metrics, telemetry, or device identifiers.</p>
+
+    <h2>Local Storage</h2>
+    <p>Preferences (theme, 12h/24h format, always-on-top pin state, and window bounds) are stored locally on your device in <code>settings.json</code> inside your OS configuration directory.</p>
+
+    <h2>Network Access</h2>
+    <p>Block Clock operates offline and makes zero network requests.</p>
+
+    <h2>Contact</h2>
+    <p>For questions or support, open an issue at <a href="https://github.com/AungMyoKyaw/block-clock" target="_blank" rel="noreferrer">github.com/AungMyoKyaw/block-clock</a>.</p>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>PolyForm Noncommercial License 1.0.0</span>
+      <div class="footer-links">
+        <a href="index.html">Home</a>
+        <a href="https://github.com/AungMyoKyaw/block-clock" target="_blank" rel="noreferrer">github.com/AungMyoKyaw/block-clock</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
 </body>
 </html>

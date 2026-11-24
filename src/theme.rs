@@ -67,7 +67,7 @@ impl Palette {
             now_ring: rgb(0xF5B942),
             text: rgb(0xF4F7F9),
             text_muted: rgb(0x909CA8),
-            text_faint: rgb(0x6F7A86),
+            text_faint: rgb(0x7D8996),
         }
     }
 

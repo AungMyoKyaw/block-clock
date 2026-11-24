@@ -1,6 +1,47 @@
 (() => {
   const RELEASE_BASE = "https://github.com/AungMyoKyaw/block-clock/releases/latest/download";
+  const THEME_STORAGE_KEY = "block-clock-theme";
+  const themeBtn = document.getElementById("theme-toggle");
+
+  function effectiveTheme() {
+    const attr = document.documentElement.getAttribute("data-theme");
+    if (attr === "dark" || attr === "light") return attr;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function applyTheme(theme, persist) {
+    if (theme === "dark" || theme === "light") {
+      document.documentElement.setAttribute("data-theme", theme);
+      if (persist) {
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, theme);
+        } catch (_) {}
+      }
+    }
+    if (themeBtn) {
+      const active = effectiveTheme();
+      themeBtn.textContent = active === "dark" ? "Light" : "Dark";
+      themeBtn.setAttribute("aria-pressed", String(active === "dark"));
+      themeBtn.setAttribute("aria-label", `Switch to ${active === "dark" ? "light" : "dark"} theme`);
+    }
+  }
+
+  let savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  } catch (_) {}
+  applyTheme(savedTheme, false);
+
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      const next = effectiveTheme() === "dark" ? "light" : "dark";
+      applyTheme(next, true);
+    });
+  }
+
   const gridEl = document.getElementById("block-grid");
+  if (!gridEl) return;
+
   const liveTimeEl = document.getElementById("live-time");
   const liveDateEl = document.getElementById("live-date");
   const hoverReadoutEl = document.getElementById("hover-readout");
@@ -14,10 +55,10 @@
   const selTimeEl = document.getElementById("sel-time");
   const selStateEl = document.getElementById("sel-state");
   const selBlockEl = document.getElementById("sel-block");
+  const selOffsetEl = document.getElementById("sel-offset");
   const clearBtn = document.getElementById("clear-selection");
   const jumpBtn = document.getElementById("jump-now");
   const formatBtn = document.getElementById("format-toggle");
-  const themeBtn = document.getElementById("theme-toggle");
   const primaryDownloadEl = document.getElementById("primary-download");
 
   let hour12 = false;
@@ -51,6 +92,19 @@
     return "Upcoming";
   }
 
+  function relativeOffset(now, cell) {
+    const diff = (cell.hour * 60 + cell.minute) - (now.hour * 60 + now.minute);
+    if (diff === 0) return "Active now";
+    const abs = Math.abs(diff);
+    const hours = Math.floor(abs / 60);
+    const mins = abs % 60;
+    let span;
+    if (hours === 0) span = `${mins}m`;
+    else if (mins === 0) span = `${hours}h`;
+    else span = `${hours}h ${pad2(mins)}m`;
+    return diff < 0 ? `${span} ago` : `in ${span}`;
+  }
+
   function currentNow() {
     const d = new Date();
     return { hour: d.getHours(), minute: d.getMinutes(), date: d };
@@ -59,15 +113,21 @@
   function detectPrimaryDownload() {
     if (!primaryDownloadEl) return;
     const ua = navigator.userAgent || "";
-    if (/Windows/i.test(ua)) {
+    if (/iPhone|iPad|iPod|Android/i.test(ua)) {
+      primaryDownloadEl.textContent = "View desktop downloads";
+      primaryDownloadEl.href = "#downloads";
+    } else if (/Windows/i.test(ua)) {
       primaryDownloadEl.textContent = "Download for Windows";
       primaryDownloadEl.href = `${RELEASE_BASE}/block-clock-windows-x64.zip`;
-    } else if (/Linux/i.test(ua) && !/Android/i.test(ua)) {
+    } else if (/Linux/i.test(ua)) {
       primaryDownloadEl.textContent = "Download for Linux";
       primaryDownloadEl.href = `${RELEASE_BASE}/block-clock-linux-x64.tar.gz`;
-    } else {
+    } else if (/Macintosh|Mac OS X/i.test(ua)) {
       primaryDownloadEl.textContent = "Download for macOS";
-      primaryDownloadEl.href = `${RELEASE_BASE}/block-clock-macos-arm64.zip`;
+      primaryDownloadEl.href = "#downloads";
+    } else {
+      primaryDownloadEl.textContent = "Download";
+      primaryDownloadEl.href = "#downloads";
     }
   }
 
@@ -127,7 +187,8 @@
     const now = currentNow();
     lastMinuteKey = `${now.hour}:${now.minute}:${now.date.toDateString()}`;
     const blockNum = now.hour * 60 + now.minute + 1;
-    const pct = Math.floor(((blockNum - 1) / 1440) * 100);
+    const pctExact = ((blockNum - 1) / 1440) * 100;
+    const pct = Math.floor(pctExact);
 
     liveTimeEl.textContent = formatTime(now.hour, now.minute);
     liveDateEl.textContent = new Intl.DateTimeFormat(undefined, {
@@ -139,7 +200,7 @@
     statBlockEl.textContent = `${blockNum} / 1440`;
     statHmEl.textContent = `${pad2(now.hour)} · ${pad2(now.minute)}`;
     statPctEl.textContent = `${pct}%`;
-    progressFillEl.style.width = `${pct}%`;
+    progressFillEl.style.width = `${pctExact.toFixed(2)}%`;
     progressTrackEl.setAttribute("aria-valuenow", String(pct));
 
     for (const item of cells) {
@@ -157,6 +218,9 @@
       selTimeEl.textContent = formatTime(selected.hour, selected.minute);
       selStateEl.textContent = stateLabel(selState);
       selBlockEl.textContent = `Block ${selected.hour * 60 + selected.minute + 1} / 1440`;
+      if (selOffsetEl) {
+        selOffsetEl.textContent = relativeOffset(now, selected);
+      }
     } else {
       selEmptyEl.hidden = false;
       selDetailEl.hidden = true;
@@ -165,6 +229,45 @@
 
     renderTimezone(now.date);
   }
+
+  function moveSelection(key) {
+    const now = currentNow();
+    const base = selected || { hour: now.hour, minute: now.minute };
+    const idx = base.hour * 60 + base.minute;
+    let nextIdx = idx;
+
+    if (key === "ArrowLeft") nextIdx = Math.max(0, idx - 1);
+    else if (key === "ArrowRight") nextIdx = Math.min(1439, idx + 1);
+    else if (key === "ArrowUp") nextIdx = Math.max(0, base.hour - 1) * 60 + base.minute;
+    else if (key === "ArrowDown") nextIdx = Math.min(23, base.hour + 1) * 60 + base.minute;
+    else if (key === "Home") nextIdx = base.hour * 60;
+    else if (key === "End") nextIdx = base.hour * 60 + 59;
+
+    selected = { hour: Math.floor(nextIdx / 60), minute: nextIdx % 60 };
+    render();
+    const targetBtn = cells[nextIdx] && cells[nextIdx].btn;
+    if (targetBtn && document.activeElement && gridEl.contains(document.activeElement)) {
+      targetBtn.focus();
+    }
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const tag = event.target && event.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      moveSelection(event.key);
+    } else if (event.key === "j" || event.key === "J") {
+      const now = currentNow();
+      selected = { hour: now.hour, minute: now.minute };
+      render();
+    } else if (event.key === "Escape" && selected) {
+      selected = null;
+      render();
+    }
+  });
 
   clearBtn.addEventListener("click", () => {
     selected = null;
@@ -181,14 +284,6 @@
     hour12 = !hour12;
     formatBtn.textContent = hour12 ? "12h" : "24h";
     render();
-  });
-
-  themeBtn.addEventListener("click", () => {
-    const root = document.documentElement;
-    const current = root.getAttribute("data-theme");
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const next = current === "dark" ? "light" : current === "light" ? "dark" : prefersDark ? "light" : "dark";
-    root.setAttribute("data-theme", next);
   });
 
   function tick() {
