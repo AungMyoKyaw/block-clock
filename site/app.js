@@ -22,6 +22,7 @@
 
   let hour12 = false;
   let selected = null;
+  let lastMinuteKey = "";
   const cells = [];
 
   function pad2(n) {
@@ -124,6 +125,7 @@
 
   function render() {
     const now = currentNow();
+    lastMinuteKey = `${now.hour}:${now.minute}:${now.date.toDateString()}`;
     const blockNum = now.hour * 60 + now.minute + 1;
     const pct = Math.floor(((blockNum - 1) / 1440) * 100);
 
@@ -189,8 +191,16 @@
     root.setAttribute("data-theme", next);
   });
 
+  function tick() {
+    const now = currentNow();
+    const minuteKey = `${now.hour}:${now.minute}:${now.date.toDateString()}`;
+    if (minuteKey !== lastMinuteKey) {
+      render();
+    }
+  }
+
   detectPrimaryDownload();
   buildGrid();
   render();
-  setInterval(render, 1000);
+  setInterval(tick, 1000);
 })();

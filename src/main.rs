@@ -14,7 +14,10 @@ use gpui::{
 #[cfg(target_os = "macos")]
 use gpui::{Menu, MenuItem};
 
-use crate::settings::{Settings, default_settings_path};
+use crate::settings::{
+    DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Settings,
+    default_settings_path,
+};
 use crate::ui::{
     BlockClockView, Escape, JumpToNow, MoveDown, MoveLeft, MoveRight, MoveRowEnd, MoveRowStart,
     MoveUp, OpenSettings, ToggleFullscreen, TogglePin,
@@ -80,10 +83,16 @@ fn main() {
                 initial_settings.window_w,
                 initial_settings.window_h,
             ) {
-                (Some(x), Some(y), Some(w), Some(h)) if w >= 720.0 && h >= 520.0 => {
+                (Some(x), Some(y), Some(w), Some(h))
+                    if w >= MIN_WINDOW_WIDTH && h >= MIN_WINDOW_HEIGHT =>
+                {
                     Bounds::new(point(px(x), px(y)), size(px(w), px(h)))
                 }
-                _ => Bounds::centered(None, size(px(1180.), px(720.)), cx),
+                _ => Bounds::centered(
+                    None,
+                    size(px(DEFAULT_WINDOW_WIDTH), px(DEFAULT_WINDOW_HEIGHT)),
+                    cx,
+                ),
             };
 
             let pin = initial_settings.pin;
@@ -94,7 +103,7 @@ fn main() {
             cx.open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    window_min_size: Some(size(px(720.), px(520.))),
+                    window_min_size: Some(size(px(MIN_WINDOW_WIDTH), px(MIN_WINDOW_HEIGHT))),
                     titlebar: Some(gpui::TitlebarOptions {
                         title: Some("Block Clock".into()),
                         ..Default::default()

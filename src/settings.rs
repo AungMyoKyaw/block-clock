@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 use crate::clock::TimeFormat;
 use crate::theme::ThemeMode;
 
+pub const MIN_WINDOW_WIDTH: f32 = 720.0;
+pub const MIN_WINDOW_HEIGHT: f32 = 520.0;
+pub const DEFAULT_WINDOW_WIDTH: f32 = 1180.0;
+pub const DEFAULT_WINDOW_HEIGHT: f32 = 720.0;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -29,7 +34,13 @@ impl Settings {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let body = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        fs::write(path, body).map_err(|e| e.to_string())
+        let tmp_path = path.with_extension("json.tmp");
+        fs::write(&tmp_path, body).map_err(|e| e.to_string())?;
+        if let Err(err) = fs::rename(&tmp_path, path) {
+            let _ = fs::remove_file(&tmp_path);
+            return Err(err.to_string());
+        }
+        Ok(())
     }
 
     pub fn load_default() -> (Self, Option<String>) {

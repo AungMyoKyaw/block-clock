@@ -13,7 +13,7 @@ use crate::clock::{
     day_percentage, duration_until_next_minute, format_time, state_at,
 };
 use crate::platform;
-use crate::settings::Settings;
+use crate::settings::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Settings};
 use crate::theme::{Palette, ThemeMode};
 
 actions!(
@@ -43,6 +43,7 @@ pub struct BlockClockView {
     settings_path: Option<PathBuf>,
     notice: Option<String>,
     focus_handle: FocusHandle,
+    save_bounds_task: Option<Task<()>>,
     _tick_task: Task<()>,
     _subscriptions: Vec<Subscription>,
 }
@@ -181,7 +182,7 @@ impl BlockClockView {
             }
         });
 
-        let bounds_sub = cx.observe_window_bounds(window, |this, window, _cx| {
+        let bounds_sub = cx.observe_window_bounds(window, |this, window, cx| {
             if window.is_fullscreen() {
                 return;
             }
@@ -190,13 +191,30 @@ impl BlockClockView {
             let y: f32 = bounds.origin.y.into();
             let w: f32 = bounds.size.width.into();
             let h: f32 = bounds.size.height.into();
-            if w >= 720.0 && h >= 520.0 {
-                this.settings.window_x = Some(x);
-                this.settings.window_y = Some(y);
-                this.settings.window_w = Some(w);
-                this.settings.window_h = Some(h);
-                this.persist_settings();
+            if w < MIN_WINDOW_WIDTH || h < MIN_WINDOW_HEIGHT {
+                return;
             }
+            if (
+                this.settings.window_x,
+                this.settings.window_y,
+                this.settings.window_w,
+                this.settings.window_h,
+            ) == (Some(x), Some(y), Some(w), Some(h))
+            {
+                return;
+            }
+            this.settings.window_x = Some(x);
+            this.settings.window_y = Some(y);
+            this.settings.window_w = Some(w);
+            this.settings.window_h = Some(h);
+            this.save_bounds_task = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(350))
+                    .await;
+                let _ = this.update(cx, |view, cx| {
+                    view.persist_settings(cx);
+                });
+            }));
         });
 
         let tick_task = cx.spawn(async move |this, cx| {
@@ -227,17 +245,19 @@ impl BlockClockView {
             settings_path,
             notice: initial_notice,
             focus_handle,
+            save_bounds_task: None,
             _tick_task: tick_task,
             _subscriptions: vec![appearance_sub, activation_sub, bounds_sub],
         }
     }
 
-    fn persist_settings(&mut self) {
+    fn persist_settings(&mut self, cx: &mut Context<Self>) {
         let Some(path) = &self.settings_path else {
             return;
         };
         if let Err(err) = self.settings.save_to(path) {
             self.notice = Some(format!("Could not save settings: {err}"));
+            cx.notify();
         }
     }
 
@@ -274,7 +294,7 @@ impl BlockClockView {
         let next = !self.settings.pin;
         if platform::set_always_on_top(window, next) {
             self.settings.pin = next;
-            self.persist_settings();
+            self.persist_settings(cx);
             cx.notify();
         }
     }
@@ -312,13 +332,13 @@ impl BlockClockView {
 
     fn set_theme(&mut self, mode: ThemeMode, cx: &mut Context<Self>) {
         self.settings.theme = mode;
-        self.persist_settings();
+        self.persist_settings(cx);
         cx.notify();
     }
 
     fn set_time_format(&mut self, format: TimeFormat, cx: &mut Context<Self>) {
         self.settings.time_format = format;
-        self.persist_settings();
+        self.persist_settings(cx);
         cx.notify();
     }
 
