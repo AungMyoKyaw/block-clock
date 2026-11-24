@@ -152,28 +152,69 @@ pub fn set_app_icon(_icon_bytes: &[u8]) {}
 
 #[cfg(target_os = "macos")]
 pub fn show_about_panel() {
-    use std::ffi::c_void;
+    use std::ffi::{c_char, c_void};
 
+    #[link(name = "AppKit", kind = "framework")]
     unsafe extern "C" {
-        fn objc_getClass(name: *const std::ffi::c_char) -> *mut c_void;
-        fn sel_registerName(name: *const std::ffi::c_char) -> *const c_void;
+        static NSAboutPanelOptionApplicationName: *mut c_void;
+        static NSAboutPanelOptionApplicationIcon: *mut c_void;
+        static NSAboutPanelOptionApplicationVersion: *mut c_void;
+        fn objc_getClass(name: *const c_char) -> *mut c_void;
+        fn sel_registerName(name: *const c_char) -> *const c_void;
         fn objc_msgSend();
     }
 
     // The menu action runs on the app thread after GPUI initializes AppKit.
     unsafe {
-        let shared_application: unsafe extern "C" fn(*mut c_void, *const c_void) -> *mut c_void =
+        let msg_no_arg: unsafe extern "C" fn(*mut c_void, *const c_void) -> *mut c_void =
             std::mem::transmute(objc_msgSend as *const c_void);
-        let app = shared_application(
+        let app = msg_no_arg(
             objc_getClass(c"NSApplication".as_ptr()),
             sel_registerName(c"sharedApplication".as_ptr()),
         );
+        let icon = msg_no_arg(app, sel_registerName(c"applicationIconImage".as_ptr()));
+        let string_class = objc_getClass(c"NSString".as_ptr());
+        let utf8_selector = sel_registerName(c"stringWithUTF8String:".as_ptr());
+        let string_from_utf8: unsafe extern "C" fn(
+            *mut c_void,
+            *const c_void,
+            *const c_char,
+        ) -> *mut c_void = std::mem::transmute(objc_msgSend as *const c_void);
+        let values = [
+            string_from_utf8(string_class, utf8_selector, c"Block Clock".as_ptr()),
+            icon,
+            string_from_utf8(
+                string_class,
+                utf8_selector,
+                concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr().cast(),
+            ),
+        ];
+        let keys = [
+            NSAboutPanelOptionApplicationName,
+            NSAboutPanelOptionApplicationIcon,
+            NSAboutPanelOptionApplicationVersion,
+        ];
+        let dictionary: unsafe extern "C" fn(
+            *mut c_void,
+            *const c_void,
+            *const *mut c_void,
+            *const *mut c_void,
+            usize,
+        ) -> *mut c_void = std::mem::transmute(objc_msgSend as *const c_void);
+        let options = dictionary(
+            objc_getClass(c"NSDictionary".as_ptr()),
+            sel_registerName(c"dictionaryWithObjects:forKeys:count:".as_ptr()),
+            values.as_ptr(),
+            keys.as_ptr(),
+            keys.len(),
+        );
+
         let order_front: unsafe extern "C" fn(*mut c_void, *const c_void, *mut c_void) =
             std::mem::transmute(objc_msgSend as *const c_void);
         order_front(
             app,
-            sel_registerName(c"orderFrontStandardAboutPanel:".as_ptr()),
-            std::ptr::null_mut(),
+            sel_registerName(c"orderFrontStandardAboutPanelWithOptions:".as_ptr()),
+            options,
         );
     }
 }
