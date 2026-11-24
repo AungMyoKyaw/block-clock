@@ -9,13 +9,28 @@
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
+  function readStoredTheme() {
+    try {
+      return window.localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStoredTheme(theme) {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function applyTheme(theme, persist) {
     if (theme === "dark" || theme === "light") {
       document.documentElement.setAttribute("data-theme", theme);
       if (persist) {
-        try {
-          localStorage.setItem(THEME_STORAGE_KEY, theme);
-        } catch (_) {}
+        writeStoredTheme(theme);
       }
     }
     if (themeBtn) {
@@ -26,11 +41,7 @@
     }
   }
 
-  let savedTheme = null;
-  try {
-    savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-  } catch (_) {}
-  applyTheme(savedTheme, false);
+  applyTheme(readStoredTheme(), false);
 
   if (themeBtn) {
     themeBtn.addEventListener("click", () => {
