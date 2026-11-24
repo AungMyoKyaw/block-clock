@@ -102,7 +102,9 @@ fn main() {
                     ..Default::default()
                 },
                 move |window, cx| {
-                    platform::set_always_on_top(window, pin);
+                    if platform::supports_always_on_top() {
+                        platform::set_always_on_top(window, pin);
+                    }
                     cx.new(|cx| {
                         BlockClockView::new(
                             window,

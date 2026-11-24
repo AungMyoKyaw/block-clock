@@ -32,19 +32,16 @@ pub enum CellState {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TimeFormat {
-    #[default]
-    #[serde(rename = "auto")]
-    Auto,
     #[serde(rename = "12h")]
     Hour12,
-    #[serde(rename = "24h")]
+    #[default]
+    #[serde(rename = "24h", alias = "auto")]
     Hour24,
 }
 
 impl TimeFormat {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Auto => "Auto (24h)",
             Self::Hour12 => "12-hour",
             Self::Hour24 => "24-hour",
         }
@@ -114,7 +111,7 @@ pub fn cell_state_label(state: CellState) -> &'static str {
 
 pub fn format_time(cell: Cell, mode: TimeFormat) -> String {
     match mode {
-        TimeFormat::Auto | TimeFormat::Hour24 => format!("{:02}:{:02}", cell.hour, cell.minute),
+        TimeFormat::Hour24 => format!("{:02}:{:02}", cell.hour, cell.minute),
         TimeFormat::Hour12 => {
             let period = if cell.hour < 12 { "AM" } else { "PM" };
             let h12 = match cell.hour % 12 {
@@ -224,7 +221,6 @@ mod tests {
 
     #[test]
     fn time_formatting() {
-        assert_eq!(format_time(Cell::new(0, 5), TimeFormat::Auto), "00:05");
         assert_eq!(format_time(Cell::new(0, 5), TimeFormat::Hour24), "00:05");
         assert_eq!(format_time(Cell::new(0, 5), TimeFormat::Hour12), "12:05 AM");
         assert_eq!(

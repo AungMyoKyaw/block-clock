@@ -268,10 +268,15 @@ impl BlockClockView {
     }
 
     fn toggle_pin(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.settings.pin = !self.settings.pin;
-        platform::set_always_on_top(window, self.settings.pin);
-        self.persist_settings();
-        cx.notify();
+        if !platform::supports_always_on_top() {
+            return;
+        }
+        let next = !self.settings.pin;
+        if platform::set_always_on_top(window, next) {
+            self.settings.pin = next;
+            self.persist_settings();
+            cx.notify();
+        }
     }
 
     fn toggle_fullscreen(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -344,13 +349,15 @@ impl BlockClockView {
                     .on_click(cx.listener(|this, _, _, cx| this.jump_to_now(cx)))
                     .child("JUMP TO NOW"),
             )
-            .child(self.render_header_icon_button(
-                "pin-btn",
-                "icons/pin.svg",
-                self.settings.pin,
-                palette,
-                cx.listener(|this, _, window, cx| this.toggle_pin(window, cx)),
-            ))
+            .when(platform::supports_always_on_top(), |el| {
+                el.child(self.render_header_icon_button(
+                    "pin-btn",
+                    "icons/pin.svg",
+                    self.settings.pin,
+                    palette,
+                    cx.listener(|this, _, window, cx| this.toggle_pin(window, cx)),
+                ))
+            })
             .child(self.render_header_icon_button(
                 "fullscreen-btn",
                 if is_fullscreen {
@@ -984,11 +991,11 @@ impl BlockClockView {
             .flex_row()
             .gap(px(8.))
             .child(self.render_segment_button(
-                "fmt-auto",
-                TimeFormat::Auto.label(),
-                self.settings.time_format == TimeFormat::Auto,
+                "fmt-24h",
+                TimeFormat::Hour24.label(),
+                self.settings.time_format == TimeFormat::Hour24,
                 palette,
-                cx.listener(|this, _, _, cx| this.set_time_format(TimeFormat::Auto, cx)),
+                cx.listener(|this, _, _, cx| this.set_time_format(TimeFormat::Hour24, cx)),
             ))
             .child(self.render_segment_button(
                 "fmt-12h",
@@ -996,13 +1003,6 @@ impl BlockClockView {
                 self.settings.time_format == TimeFormat::Hour12,
                 palette,
                 cx.listener(|this, _, _, cx| this.set_time_format(TimeFormat::Hour12, cx)),
-            ))
-            .child(self.render_segment_button(
-                "fmt-24h",
-                TimeFormat::Hour24.label(),
-                self.settings.time_format == TimeFormat::Hour24,
-                palette,
-                cx.listener(|this, _, _, cx| this.set_time_format(TimeFormat::Hour24, cx)),
             ));
 
         let pin_toggle = div()
@@ -1114,7 +1114,7 @@ impl BlockClockView {
                     )
                     .child(format_row),
             )
-            .child(pin_toggle)
+            .when(platform::supports_always_on_top(), |el| el.child(pin_toggle))
             .child(
                 div()
                     .pt(px(12.))

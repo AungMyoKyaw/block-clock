@@ -1,5 +1,9 @@
 use gpui::Window;
 
+pub const fn supports_always_on_top() -> bool {
+    cfg!(any(target_os = "macos", target_os = "windows"))
+}
+
 #[cfg(target_os = "macos")]
 pub fn set_always_on_top(window: &Window, enabled: bool) -> bool {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -43,7 +47,58 @@ pub fn set_always_on_top(window: &Window, enabled: bool) -> bool {
     true
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub fn set_always_on_top(window: &Window, enabled: bool) -> bool {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use std::ffi::c_void;
+
+    const HWND_TOPMOST: *mut c_void = (-1isize) as *mut c_void;
+    const HWND_NOTOPMOST: *mut c_void = (-2isize) as *mut c_void;
+    const SWP_NOSIZE: u32 = 0x0001;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOACTIVATE: u32 = 0x0010;
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn SetWindowPos(
+            hwnd: *mut c_void,
+            hwnd_insert_after: *mut c_void,
+            x: i32,
+            y: i32,
+            cx: i32,
+            cy: i32,
+            flags: u32,
+        ) -> i32;
+    }
+
+    let Ok(handle) = HasWindowHandle::window_handle(window) else {
+        return false;
+    };
+    let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+        return false;
+    };
+
+    let hwnd = win32.hwnd.get() as *mut c_void;
+    let insert_after = if enabled {
+        HWND_TOPMOST
+    } else {
+        HWND_NOTOPMOST
+    };
+
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            insert_after,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        ) != 0
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn set_always_on_top(_window: &Window, _enabled: bool) -> bool {
     false
 }
